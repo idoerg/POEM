@@ -29,6 +29,10 @@ do
         gpd="$2"
         shift # past argument
         ;;
+        -l|--fasta)
+        lr="$2"
+        shift # past argument
+        ;;
         *)
             # unknown option
         ;;
@@ -42,10 +46,14 @@ if [ ! $fas ]; then
 	echo '#'
 	echo '# usage:'
     echo 'for genome|assembly|contig'
-	echo '$ bash this_script.sh -f genome.fsa -a y -p prokka'
+	echo '$ bash this_script.sh -f genome.fsa -a n -p prokka'
     echo ''
-    echo 'for short reads'
-	echo '$ bash this_script.sh -f reads.fsa -a n -p prokka'
+    echo 'for short reads (length <= 600)'
+	echo '$ bash this_script.sh -f reads.fsa -a y -p prokka -l n'
+
+    echo 'for short reads (length > 600)'
+	echo '$ bash this_script.sh -f reads.fsa -a y -p prokka -l y'
+
 	echo '#'
 	echo '#######################################'
 	echo ''
@@ -65,7 +73,12 @@ mkdir -p $temp
 if [[ $asm == "Y" ]] || [[ $asm == "y" ]]
 then
     echo "assembly mode"
-    idba_ud -l $fas -o $temp/assembly --pre_correction > $temp/asm.log
+
+    if [[ $lr == "n" ]] || [[ $lr == "N" ]]; then
+        idba_ud -r $fas -o $temp/assembly --pre_correction > $temp/asm.log
+    else
+        idba_ud -l $fas -o $temp/assembly --pre_correction > $temp/asm.log
+    fi
     # check the header of the fasta
     awk -F" " '{if($1~/^>/){print $1}else{print $0}}' $temp/assembly/contig.fa > $temp/input.fsa
 else
@@ -90,14 +103,19 @@ echo ''
 
 if [[ $gpd == "gmk" ]] || [[ $gpd == "genemark" ]]; then
 
-    gmhmmp=/home/xiaoh/Downloads/genome/evaluator/quast-3.1/libs/genemark/linux_64/gmhmmp 
+    #gmhmmp=/home/xiaoh/Downloads/genome/evaluator/quast-3.1/libs/genemark/linux_64/gmhmmp 
+    gmhmmp=gmhmmp 
     $gmhmmp -A $fasta\_gmk_aa.fsa -p 0 -f G -m $SCRIPTPATH/../config/MetaGenemark/MetaGeneMark_v1.mod $fasta
 
 elif [[ $gpd == "prokka" ]] || [[ $gpd == "pka" ]]; then
 
     #/usr/bin/perl /home/xiaoh/Downloads/compiler/intel/intelpython27/bin/prokka --quiet --fast --prefix prokka_out --metagenome --force --outdir $fasta\_prokka $fasta
-    prokka --quiet --fast --prefix prokka_out --metagenome --force --outdir $fasta\_prokka $fasta
-    $python $SCRIPTPATH/../lib/pka2gmk.py $fasta $fasta\_prokka/prokka_out.faa $fasta\_prokka/prokka_out.gff > $fasta\_gmk_aa.fsa
+    #prokka --quiet --fast --prefix prokka_out --metagenome --centre X --compliant --force --outdir $fasta\_prokka $fasta
+    # prokka needs clean contig names:
+    $python $SCRIPTPATH/../lib/clean_header.py $fasta > $fasta\_new.fsa
+    prokka --quiet --fast --prefix prokka_out --metagenome --force --outdir $fasta\_prokka $fasta\_new.fsa
+    #$python $SCRIPTPATH/../lib/pka2gmk.py $fasta $fasta\_prokka/prokka_out.faa $fasta\_prokka/prokka_out.gff > $fasta\_gmk_aa.fsa
+    $python $SCRIPTPATH/../lib/pka2gmk.py $fasta\_new.fsa $fasta\_prokka/prokka_out.faa $fasta\_prokka/prokka_out.gff > $fasta\_gmk_aa.fsa
 
 else
     exit 1
